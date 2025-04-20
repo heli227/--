@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能点名与积分助手</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap">
+  <style>
+    body{font-family:'Noto Serif SC',serif;background:#f6f6f6;margin:0;padding:40px 20px;line-height:1.6;}
+    #main{max-width:900px;margin:0 auto;background:#fff;padding:40px;border-top:4px double #000;border-bottom:1px solid #000;}
+    h1{margin:0 0 30px 0;text-align:center;font-size:2.4em;font-weight:900;letter-spacing:1px;color:#000;border-bottom:1px solid #eee;padding-bottom:20px;}
+    #login-section{text-align:center;margin-bottom:30px;}
+    #password-input{width:300px;padding:12px;font-size:1.1em;border:1px solid #ddd;background:#f9f9f9;margin-bottom:10px;font-family:inherit;}
+    #password-input:focus{outline:none;border-color:#000;background:#fff;}
+    #password-error{color:#c00;margin-top:10px;display:none;}
+    #content-section{display:none;}
+    #student-form{display:flex;gap:15px;flex-wrap:wrap;margin-bottom:25px;}
+    #student-form input{padding:12px;border:1px solid #ddd;background:#f9f9f9;font-size:1em;flex:1;min-width:180px;font-family:inherit;}
+    #student-form input:focus{outline:none;border-color:#000;background:#fff;}
+    #student-form button{padding:12px 30px;border:none;background:#000;color:#fff;cursor:pointer;font-size:1em;font-weight:700;font-family:inherit;}
+    #student-form button:hover{background:#333;}
+    #import-area{margin:20px 0;}
+    #import-area textarea{width:100%;height:80px;padding:12px;border:1px solid #ddd;background:#f9f9f9;resize:vertical;font-size:1em;font-family:inherit;margin-bottom:10px;}
+    #import-area textarea:focus{outline:none;border-color:#000;background:#fff;}
+    #import-area button{padding:10px 25px;background:#000;color:#fff;border:none;cursor:pointer;font-size:1em;font-weight:700;font-family:inherit;}
+    #import-area button:hover{background:#333;}
+    .control-panel{display:none;margin:20px 0;padding:15px;border:1px solid #eee;background:#f9f9f9;}
+    #manual-input{display:flex;gap:10px;margin-bottom:15px;}
+    #manual-input input{padding:10px;border:1px solid #ddd;font-size:1em;flex:1;}
+    #manual-input button{padding:10px 15px;border:none;background:#000;color:#fff;cursor:pointer;font-size:1em;font-weight:700;}
+    #call-btn{display:block;width:100%;margin:25px 0;padding:20px;font-size:1.3em;background:#000;color:#fff;border:none;cursor:pointer;font-weight:700;font-family:inherit;}
+    #call-btn:hover{background:#333;}
+    table{width:100%;border-collapse:collapse;margin-top:30px;}
+    th,td{text-align:left;padding:15px;border-bottom:1px solid #eee;}
+    th{background:#fff;font-weight:700;color:#000;border-bottom:2px solid #000;}
+    tr.selected td{background:#f9f9f9;}
+    .dashboard{margin-top:20px;display:flex;flex-wrap:wrap;gap:20px;}
+    .top-students{flex:1;min-width:300px;background:#f9f9f9;padding:15px;border:1px solid #eee;}
+    .top-students h3{margin-top:0;border-bottom:1px solid #ddd;padding-bottom:10px;}
+    .top-list{list-style:none;padding:0;margin:0;}
+    .top-list li{padding:8px 0;border-bottom:1px solid #eee;display:flex;justify-content:space-between;}
+    #animation-container{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.9);z-index:110;display:none;align-items:center;justify-content:center;flex-direction:column;}
+    .animation-content{color:#fff;text-align:center;}
+    .animation-timer{font-size:6em;font-weight:700;margin-bottom:20px;}
+    #popup,#confirm-popup{display:none;position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.8);z-index:100;align-items:center;justify-content:center;}
+    #popup .content,#confirm-popup .content{background:#fff;padding:40px;text-align:center;max-width:400px;width:90%;}
+    #popup .student-name{font-size:2em;font-weight:700;margin-bottom:10px;color:#000;}
+    #popup .student-info{margin-bottom:30px;color:#666;font-size:1.2em;}
+    #popup .score-btns{display:flex;justify-content:center;gap:30px;}
+    #popup .score-btns button{width:120px;height:120px;border-radius:50%;font-size:3em;border:none;cursor:pointer;font-weight:700;font-family:inherit;transition:transform 0.1s;}
+    #popup .score-btns button:active{transform:scale(0.95);}
+    #popup .right{background:#4CAF50;color:#fff;}
+    #popup .wrong{background:#F44336;color:#fff;}
+    #reset-btn{padding:10px 25px;background:#c00;color:#fff;border:none;cursor:pointer;font-size:1em;font-weight:700;font-family:inherit;}
+    #reset-btn:hover{background:#900;}
+    .control-btns{display:flex;gap:15px;flex-wrap:wrap;}
+    .control-btns button{padding:10px 15px;background:#000;color:#fff;border:none;cursor:pointer;font-size:1em;font-weight:700;font-family:inherit;}
+    #confirm-popup .message{font-size:1.2em;margin-bottom:25px;}
+    #confirm-popup .buttons{display:flex;justify-content:center;gap:20px;}
+    #confirm-popup button{padding:12px 30px;font-size:1.1em;border:none;cursor:pointer;font-weight:700;font-family:inherit;}
+    #confirm-popup .confirm{background:#c00;color:#fff;}
+    #confirm-popup .confirm:hover{background:#900;}
+    #confirm-popup .cancel{background:#eee;color:#000;}
+    #confirm-popup .cancel:hover{background:#ddd;}
+    @media (max-width:900px){#main{padding:20px;}h1{font-size:2em;}}
+    @media (max-width:600px){#main{padding:15px;}#student-form{flex-direction:column;}table{font-size:0.9em;}}
+  </style>
+</head>
+<body>
+  <div id="main">
+    <h1>智能点名与积分助手</h1>
+    
+    <div id="login-section">
+      <input type="password" id="password-input" placeholder="请输入访问密码" required>
+      <div id="password-error"></div>
+    </div>
+    
+    <div id="content-section">
+      <div class="control-btns">
+        <button id="manual-score-btn">手动加减分</button>
+        <button id="scoreboard-btn">积分统计</button>
+        <button id="export-btn">导出数据</button>
+        <button id="reset-btn">重置积分</button>
+      </div>
+      
+      <div id="manual-score-panel" class="control-panel">
+        <h3>手动加减分</h3>
+        <div id="manual-input">
+          <input type="text" id="student-id" placeholder="学生序号或姓名">
+          <input type="number" id="score-value" placeholder="分数" value="2">
+          <button id="add-score-btn">加分</button>
+          <button id="minus-score-btn">减分</button>
+        </div>
+      </div>
+      
+      <form id="student-form" autocomplete="off">
+        <input id="name" type="text" placeholder="学生姓名" required>
+        <input id="score" type="number" placeholder="初始成绩" min="0" max="100" required>
+        <button type="submit">添加学生</button>
+      </form>
+      
+      <div id="import-area">
+        <textarea id="import-text" placeholder="批量导入：每行格式为 姓名，成绩"></textarea>
+        <button id="import-btn">批量导入</button>
+        <button id="update-score-btn" style="margin-left:10px;">批量更新成绩</button>
+      </div>
+      
+      <button id="call-btn">开始点名</button>
+      
+      <div class="dashboard">
+        <div class="top-students">
+          <h3>本周积分TOP5</h3>
+          <ul class="top-list" id="top-students-list"></ul>
+        </div>
+      </div>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>序号</th>
+            <th>姓名</th>
+            <th>初始成绩</th>
+            <th>课堂积分</th>
+          </tr>
+        </thead>
+        <tbody id="student-list"></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <div id="animation-container">
+    <div class="animation-content">
+      <div class="animation-timer">0</div>
+      <div class="animation-text">正在随机抽取学生...</div>
+    </div>
+  </div>
+  
+  <div id="popup">
+    <div class="content">
+      <div class="student-name" id="popup-name"></div>
+      <div class="student-info" id="popup-info"></div>
+      <div class="score-btns">
+        <button class="right" id="btn-right">√</button>
+        <button class="wrong" id="btn-wrong">×</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="confirm-popup">
+    <div class="content">
+      <div class="message">确定要重置所有学生的积分吗？此操作不可撤销。</div>
+      <div class="buttons">
+        <button class="confirm" id="confirm-reset">确定重置</button>
+        <button class="cancel" id="cancel-reset">取消</button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    const PASSWORD = '123456';
+    const LS_KEY = 'smart_rollcall_students_v2'; // 升级版本号
+    let students = [];
+    let lastCalledIndex = null;
+    let lastStudentId = 0;
+    
+    // 检查密码
+    function checkPassword() {
+      const input = document.getElementById('password-input').value;
+      if (input === PASSWORD) {
+        document.getElementById('login-section').style.display = 'none';
+        document.getElementById('content-section').style.display = 'block';
+        load();
+        render();
+        renderTopList();
+        setTimeout(autoBatchImport, 200);
+        setupWeeklyReset();
+      } else {
+        const error = document.getElementById('password-error');
+        error.textContent = '密码错误，请重试';
+        error.style.display = 'block';
+        document.getElementById('password-input').value = '';
+        setTimeout(() => {
+          error.style.display = 'none';
+        }, 3000);
+      }
+    }
+    
+    document.getElementById('password-input').onkeypress = function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        checkPassword();
+      }
+    };
+    
+    // 数据存储与加载
+    function save() {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        students: students,
+        lastUpdate: Date.now(),
+        lastStudentId: lastStudentId
+      }));
+    }
+    
+    function load() {
+      const d = localStorage.getItem(LS_KEY);
+      if (d) {
+        try {
+          const data = JSON.parse(d);
+          students = data.students || [];
+          lastStudentId = data.lastStudentId || students.length;
+          
+          // 为旧数据添加id（兼容旧版本）
+          students.forEach((student, index) => {
+            if (!student.id) {
+              student.id = index + 1;
+            }
+            if (!student.history) {
+              student.history = [];
+            }
+          });
+        } catch (e) {
+          students = [];
+          lastStudentId = 0;
+        }
+      } else {
+        students = [];
+        lastStudentId = 0;
+      }
+    }
+    
+    // 渲染学生列表
+    function render() {
+      const tbody = document.getElementById('student-list');
+      tbody.innerHTML = '';
+      students.forEach((stu, i) => {
+        const tr = document.createElement('tr');
+        if (i === lastCalledIndex) tr.classList.add('selected');
+        tr.innerHTML = `
+          <td>${stu.id}</td>
+          <td>${stu.name}</td>
+          <td>${stu.initScore}</td>
+          <td>${stu.points}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    
+    // 渲染TOP5列表
+    function renderTopList() {
+      const topList = document.getElementById('top-students-list');
+      topList.innerHTML = '';
+      
+      // 按积分排序并取前5名
+      const sortedStudents = [...students]
+        .sort((a, b) => b.points - a.points)
+        .slice(0, 5);
+        
+      sortedStudents.forEach(student => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <span>${student.id}. ${student.name}</span>
+          <span>${student.points}分</span>
+        `;
+        topList.appendChild(li);
+      });
+    }
+    
+    // 添加学生
+    function addStudent(name, score) {
+      lastStudentId++;
+      students.push({
+        id: lastStudentId,
+        name,
+        initScore: score,
+        points: 0,
+        history: []
+      });
+      save();
+      render();
+      renderTopList();
+    }
+    
+    // 批量导入
+    function importStudents(text) {
+      const lines = text.split(/\r?\n/);
+      let added = 0;
+      lines.forEach(line => {
+        let parts = line.split(',');
+        if (parts.length < 2) {
+          parts = line.trim().split(/\s+/);
+        }
+        if (parts.length >= 2) {
+          const name = parts[0].trim();
+          const score = parseInt(parts[1].trim(), 10);
+          if (name && Number.isFinite(score)) {
+            addStudent(name, score);
+            added++;
+          }
+        }
+      });
+      return added;
+    }
+    
+    // 动画与点名
+    function startAnimation(callback) {
+      const container = document.getElementById('animation-container');
+      const timerEl = container.querySelector('.animation-timer');
+      container.style.display = 'flex';
+      
+      let timeLeft = 0;
+      timerEl.textContent = timeLeft;
+      
+      const timer = setInterval(() => {
+        timeLeft--;
+        if (timeLeft <= 0) {
+          clearInterval(timer);
+          container.style.display = 'none';
+          if (callback) callback();
+        } else {
+          timerEl.textContent = timeLeft;
+        }
+      }, 1000);
+    }
+    
+    function showPopup(idx) {
+      if (idx == null || !students[idx]) return;
+      const student = students[idx];
+      document.getElementById('popup-name').textContent = student.name;
+      document.getElementById('popup-info').textContent = `序号: ${student.id} | 本周积分: ${student.points}`;
+      document.getElementById('popup').style.display = 'flex';
+      lastCalledIndex = idx;
+      render();
+    }
+    
+    function hidePopup() {
+      document.getElementById('popup').style.display = 'none';
+    }
+    
+    // 更新积分
+    function updatePoints(idx, delta) {
+      if (students[idx]) {
+        students[idx].points += delta;
+        const now = new Date();
+        const week = getWeekNumber(now);
+        const ds = now.getFullYear() + "-" + (now.getMonth() + 1).toString().padStart(2, '0') + "-" + now.getDate().toString().padStart(2, '0');
+        
+        students[idx].history.push({
+          time: Date.now(),
+          delta,
+          date: ds,
+          week
+        });
+        
+        save();
+        render();
+        renderTopList();
+      }
+    }
+    
+    // 查找学生（通过ID或姓名）
+    function findStudent(idOrName) {
+      // 先尝试通过ID查找
+      const id = parseInt(idOrName, 10);
+      if (!isNaN(id)) {
+        return students.findIndex(s => s.id === id);
+      }
+      
+      // 再尝试通过姓名查找
+      return students.findIndex(s => s.name === idOrName);
+    }
+    
+    // 重置积分
+    function resetPoints() {
+      students.forEach(student => {
+        student.points = 0;
+        student.history = [];
+      });
+      save();
+      render();
+      renderTopList();
+    }
+    
+    // 导出数据
+    function exportData() {
+      const now = new Date();
+      const filename = `积分统计_${now.getFullYear()}${(now.getMonth()+1).toString().padStart(2,'0')}${now.getDate().toString().padStart(2,'0')}.csv`;
+      
+      let csv = '序号,姓名,初始成绩,当前积分,提问次数,正确率\n';
+      
+      students.forEach(student => {
+        const totalQuestions = student.history.length;
+        const correctAnswers = student.history.filter(h => h.delta > 0).length;
+        const correctRate = totalQuestions ? Math.round(correctAnswers / totalQuestions * 100) : 0;
+        
+        csv += `${student.id},${student.name},${student.initScore},${student.points},${totalQuestions},${correctRate}%\n`;
+      });
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    // 弹窗控制
+    function showConfirmPopup() {
+      document.getElementById('confirm-popup').style.display = 'flex';
+    }
+    
+    function hideConfirmPopup() {
+      document.getElementById('confirm-popup').style.display = 'none';
+    }
+    
+    // 正态分布函数 (Fisher-Yates 洗牌结合正态分布权重)
+    function normalDistribution(x, mean, stdDev) {
+      const a = 1 / (stdDev * Math.sqrt(2 * Math.PI));
+      const b = -Math.pow(x - mean, 2) / (2 * Math.pow(stdDev, 2));
+      return a * Math.exp(b);
+    }
+    
+    // 获取当前周数
+    function getWeekNumber(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    
+    // 自动周重置
+    function setupWeeklyReset() {
+      // 检查是否需要重置
+      const now = new Date();
+      const day = now.getDay(); // 0-6, 0是周日
+      const lastUpdateTime = localStorage.getItem('last_reset_time');
+      
+      if (lastUpdateTime) {
+        const lastUpdate = new Date(parseInt(lastUpdateTime));
+        const lastWeek = getWeekNumber(lastUpdate);
+        const currentWeek = getWeekNumber(now);
+        
+        // 如果当前是周五或之后，且上次重置是在上一周或更早
+        if ((day === 5 && now.getHours() >= 23 && now.getMinutes() >= 59) || day >= 6 || day <= 4) {
+          if (currentWeek > lastWeek) {
+            // 自动重置积分，但保留历史记录
+            students.forEach(student => {
+              student.points = 0;
+            });
+            save();
+            localStorage.setItem('last_reset_time', now.getTime().toString());
+            alert('系统已自动重置本周积分');
+          }
+        }
+      } else {
+        // 首次设置
+        localStorage.setItem('last_reset_time', now.getTime().toString());
+      }
+    }
+    
+    // 点名算法 - 基于正态分布的加权随机
+    function smartPick() {
+      if (students.length === 0) return null;
+      
+      // 计算平均分和标准差
+      const scores = students.map(s => s.initScore);
+      const mean = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+      
+      const variance = scores.reduce((sum, score) => sum + Math.pow(score - mean, 2), 0) / scores.length;
+      const stdDev = Math.sqrt(variance);
+      
+      // 计算每个学生的权重
+      let weights = students.map((student, index) => {
+        // 基于成绩的正态分布权重
+        const scoreWeight = normalDistribution(student.initScore, mean, stdDev);
+        
+        // 基于积分的调整因子 - 积分越少被点到的概率越高
+        const pointsAdjustment = 1.5 - (student.points / 20); // 积分越高，调整因子越低，但不低于0.5
+        const adjustedWeight = Math.max(0.5, Math.min(2.0, pointsAdjustment));
+        
+        return scoreWeight * adjustedWeight;
+      });
+      
+      // 归一化权重
+      const totalWeight = weights.reduce((a, b) => a + b, 0);
+      weights = weights.map(w => w / totalWeight);
+      
+      // 随机选择
+      const random = Math.random();
+      let cumulativeWeight = 0;
+      
+      for (let i = 0; i < weights.length; i++) {
+        cumulativeWeight += weights[i];
+        if (random < cumulativeWeight) {
+          return i;
+        }
+      }
+      
+      // 保底方案
+      return Math.floor(Math.random() * students.length);
+    }
+    
+    // 事件监听
+    document.getElementById('student-form').onsubmit = function(e) {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      const score = parseInt(document.getElementById('score').value, 10);
+      if (name && Number.isFinite(score)) {
+        addStudent(name, score);
+        document.getElementById('name').value = '';
+        document.getElementById('score').value = '';
+      }
+    };
+    
+    document.getElementById('import-btn').onclick = function() {
+      const text = document.getElementById('import-text').value;
+      const added = importStudents(text);
+      if (added > 0) document.getElementById('import-text').value = '';
+    };
+    
+    document.getElementById('call-btn').onclick = function() {
+      startAnimation(() => {
+        const idx = smartPick();
+        if (idx != null) {
+          showPopup(idx);
+        }
+      });
+    };
+    
+    document.getElementById('btn-right').onclick = function() {
+      if (lastCalledIndex != null) {
+        updatePoints(lastCalledIndex, 2);
+        hidePopup();
+      }
+    };
+    
+    document.getElementById('btn-wrong').onclick = function() {
+      if (lastCalledIndex != null) {
+        updatePoints(lastCalledIndex, -2);
+        hidePopup();
+      }
+    };
+    
+    document.getElementById('manual-score-btn').onclick = function() {
+      const panel = document.getElementById('manual-score-panel');
+      panel.style.display = panel.style.display === 'none' || panel.style.display === '' ? 'block' : 'none';
+    };
+    
+    document.getElementById('add-score-btn').onclick = function() {
+      const idOrName = document.getElementById('student-id').value.trim();
+      const value = parseInt(document.getElementById('score-value').value, 10) || 1;
+      
+      if (idOrName) {
+        const idx = findStudent(idOrName);
+        if (idx !== -1) {
+          updatePoints(idx, value);
+          alert(`已为 ${students[idx].name} 加 ${value} 分`);
+        } else {
+          alert('未找到该学生');
+        }
+      }
+    };
+    
+    document.getElementById('minus-score-btn').onclick = function() {
+      const idOrName = document.getElementById('student-id').value.trim();
+      const value = parseInt(document.getElementById('score-value').value, 10) || 1;
+      
+      if (idOrName) {
+        const idx = findStudent(idOrName);
+        if (idx !== -1) {
+          updatePoints(idx, -value);
+          alert(`已为 ${students[idx].name} 减 ${value} 分`);
+        } else {
+          alert('未找到该学生');
+        }
+      }
+    };
+    
+    document.getElementById('export-btn').onclick = exportData;
+    
+    document.getElementById('popup').onclick = function(e) {
+      if (e.target === this) hidePopup();
+    };
+    
+    document.getElementById('reset-btn').onclick = showConfirmPopup;
+    
+    document.getElementById('confirm-reset').onclick = function() {
+      resetPoints();
+      hideConfirmPopup();
+    };
+    
+    document.getElementById('cancel-reset').onclick = hideConfirmPopup;
+    
+    document.getElementById('confirm-popup').onclick = function(e) {
+      if (e.target === this) hideConfirmPopup();
+    };
+    
+    document.getElementById('scoreboard-btn').onclick = function() {
+      window.location.href = 'scoreboard.html';
+    };
+    
+    document.getElementById('update-score-btn').onclick = function() {
+      const text = document.getElementById('import-text').value;
+      let lines = text.split(/\r?\n/);
+      let updated = 0;
+      
+      lines.forEach(line => {
+        let parts = line.split(',');
+        if (parts.length < 2) {
+          parts = line.trim().split(/\s+/);
+        }
+        if (parts.length >= 2) {
+          const name = parts[0].trim();
+          const score = parseInt(parts[1].trim(), 10);
+          if (name && Number.isFinite(score)) {
+            let stu = students.find(s => s.name === name);
+            if (stu) {
+              stu.initScore = score;
+              updated++;
+            }
+          }
+        }
+      });
+      
+      if (updated > 0) {
+        save();
+        render();
+        document.getElementById('import-text').value = '';
+        alert('已批量更新' + updated + '名学生的成绩');
+      }
+    };
+    
+    function autoBatchImport() {
+      if (localStorage.getItem(LS_KEY)) return;
+      var data = `周成,94\n第一名,94\n周科函,89\n龙金宏,87\n李晶,87\n包丽彩,77\n代晨曦,75\n李博,69\n张仕海,68\n缪佳辰,67\n刘瑞,66\n付馨孟,65\n杜希,65\n吴蕊,63\n陈煜堞,59\n李凌薇,57\n龙兴骐,56\n黄志辛,53\n孔思靖,52\n沈庭辉,51\n范学森,50\n惠通,49\n刘鹏勋,45\n沈优,42\n王语嫣,42\n崔羽哲,41\n张靖杭暄,40\n卢彦哲,39\n周思燃,39\n孔德煊,37\n许梓睿,36\n魏柔,36\n冉智辉,31\n陈媛,29\n单如意,28\n沈斯,27\n张元博,24\n柳成政,24\n蒋子丹,24\n沈文琪,23\n陈金凤,21\n朱加祺,19\n赵庆烨,18\n缪紫堉,17\n王银,16\n吴开蕊,15\n钱俞蓉,15\n顾晟,14\n刘欧,13\n黄靖雲,12\n缪志贤,11`;
+      var textarea = document.getElementById('import-text');
+      if (textarea) {
+        textarea.value = data;
+        document.getElementById('import-btn').click();
+      }
+    }
+  </script>
+</body>
+</html>

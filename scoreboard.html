@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能点名积分统计</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body{font-family:'Noto Serif SC',serif;background:#f6f6f6;margin:0;padding:40px 20px;line-height:1.6;}
+    #main{max-width:1000px;margin:0 auto;background:#fff;padding:40px;border-top:4px double #000;border-bottom:1px solid #000;}
+    h1{margin:0 0 30px 0;text-align:center;font-size:2.2em;font-weight:900;letter-spacing:1px;color:#000;border-bottom:1px solid #eee;padding-bottom:20px;}
+    .tabs{display:flex;margin-bottom:30px;border-bottom:1px solid #ddd;}
+    .tab{padding:10px 20px;cursor:pointer;background:#f5f5f5;border:1px solid #ddd;border-bottom:none;margin-right:5px;}
+    .tab.active{background:#fff;border-bottom:1px solid #fff;margin-bottom:-1px;font-weight:bold;}
+    .tab-content{display:none;}
+    .tab-content.active{display:block;}
+    .chart-container{width:100%;height:400px;margin:30px 0;}
+    .stats-container{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:30px;}
+    .stat-box{flex:1;min-width:200px;background:#f9f9f9;padding:15px;border:1px solid #eee;text-align:center;}
+    .stat-value{font-size:2em;font-weight:bold;margin:10px 0;}
+    table{width:100%;border-collapse:collapse;margin-top:30px;}
+    th,td{text-align:left;padding:12px;border-bottom:1px solid #eee;}
+    th{background:#fff;font-weight:700;color:#000;border-bottom:2px solid #000;}
+    tr.selected td{background:#f9f9f9;}
+    .export-btn{padding:10px 25px;background:#000;color:#fff;border:none;cursor:pointer;font-size:1em;font-weight:700;font-family:inherit;margin-top:20px;}
+    .export-btn:hover{background:#333;}
+    #back-btn{padding:10px 25px;background:#000;color:#fff;border:none;cursor:pointer;font-size:1em;font-weight:700;font-family:inherit;margin-bottom:20px;}
+    #back-btn:hover{background:#333;}
+    .week-select{padding:10px;font-size:1em;border:1px solid #ddd;margin-bottom:20px;min-width:200px;}
+    .filters{display:flex;gap:15px;margin-bottom:20px;flex-wrap:wrap;}
+    @media (max-width:900px){#main{padding:20px;}h1{font-size:1.5em;}}
+  </style>
+</head>
+<body>
+  <div id="main">
+    <button id="back-btn" onclick="window.location.href='index.html'">返回主页面</button>
+    <h1>课堂积分数据分析</h1>
+    
+    <div class="tabs">
+      <div class="tab active" data-tab="weekly">周数据统计</div>
+      <div class="tab" data-tab="distribution">成绩分布</div>
+      <div class="tab" data-tab="details">学生明细</div>
+    </div>
+    
+    <div id="weekly-tab" class="tab-content active">
+      <div class="filters">
+        <select id="week-select" class="week-select">
+          <option value="current">本周数据</option>
+        </select>
+        <button id="export-weekly" class="export-btn">导出周数据</button>
+      </div>
+      
+      <div class="stats-container">
+        <div class="stat-box">
+          <div class="stat-label">本周提问次数</div>
+          <div class="stat-value" id="question-count">0</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">平均正确率</div>
+          <div class="stat-value" id="correct-rate">0%</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">本周积分最高</div>
+          <div class="stat-value" id="max-points">0</div>
+        </div>
+      </div>
+      
+      <div class="chart-container">
+        <canvas id="weekly-chart"></canvas>
+      </div>
+    </div>
+    
+    <div id="distribution-tab" class="tab-content">
+      <div class="chart-container">
+        <canvas id="distribution-chart"></canvas>
+      </div>
+      
+      <div class="chart-container">
+        <canvas id="score-distribution-chart"></canvas>
+      </div>
+    </div>
+    
+    <div id="details-tab" class="tab-content">
+      <div class="filters">
+        <button id="export-details" class="export-btn">导出明细</button>
+      </div>
+      
+      <table id="score-table">
+        <thead>
+          <tr id="thead-row">
+            <th>序号</th>
+            <th>姓名</th>
+            <th>初始成绩</th>
+            <th>本周积分</th>
+            <th>提问次数</th>
+            <th>正确率</th>
+          </tr>
+        </thead>
+        <tbody id="score-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+  
+  <script>
+    const LS_KEY = 'smart_rollcall_students_v2';
+    let students = [];
+    let weeks = new Set();
+    let weeklyData = {};
+    let chartsInitialized = false;
+    
+    // 加载数据
+    function load() {
+      const d = localStorage.getItem(LS_KEY);
+      if (d) {
+        try {
+          const data = JSON.parse(d);
+          students = data.students || [];
+          
+          // 兼容旧版数据
+          students.forEach((student, index) => {
+            if (!student.id) {
+              student.id = index + 1;
+            }
+            if (!student.history) {
+              student.history = [];
+            }
+            
+            // 收集周数据
+            student.history.forEach(record => {
+              if (record.week) {
+                weeks.add(record.week);
+              } else {
+                // 如果没有周信息，从日期计算
+                const date = new Date(record.time);
+                const week = getWeekNumber(date);
+                record.week = week;
+                weeks.add(week);
+              }
+            });
+          });
+        } catch (e) {
+          students = [];
+        }
+      } else {
+        students = [];
+      }
+      
+      // 处理周选择器
+      const weekSelect = document.getElementById('week-select');
+      weekSelect.innerHTML = '<option value="current">本周数据</option>';
+      
+      // 获取当前周
+      const currentWeek = getWeekNumber(new Date());
+      
+      // 添加历史周数据
+      Array.from(weeks)
+        .sort((a, b) => b - a) // 降序排列，最近的周在前
+        .forEach(week => {
+          if (week !== currentWeek) {
+            weekSelect.innerHTML += `<option value="${week}">第${week}周</option>`;
+          }
+        });
+        
+      // 处理周数据
+      processWeeklyData();
+    }
+    
+    // 处理周数据
+    function processWeeklyData() {
+      weeklyData = {};
+      
+      weeks.forEach(week => {
+        const weekData = {
+          questionCount: 0,
+          correctCount: 0,
+          studentPoints: {},
+          pointsDistribution: {}
+        };
+        
+        students.forEach(student => {
+          const weekRecords = student.history.filter(r => r.week === week);
+          
+          weekData.questionCount += weekRecords.length;
+          weekData.correctCount += weekRecords.filter(r => r.delta > 0).length;
+          
+          // 计算学生在这一周的总积分
+          const weekPoints = weekRecords.reduce((sum, r) => sum + r.delta, 0);
+          weekData.studentPoints[student.id] = weekPoints;
+          
+          // 统计积分分布
+          if (!weekData.pointsDistribution[weekPoints]) {
+            weekData.pointsDistribution[weekPoints] = 0;
+          }
+          weekData.pointsDistribution[weekPoints]++;
+        });
+        
+        weeklyData[week] = weekData;
+      });
+      
+      // 更新UI
+      updateWeeklyStats();
+      if (!chartsInitialized) {
+        initCharts();
+        chartsInitialized = true;
+      } else {
+        updateCharts();
+      }
+      buildDetailTable();
+    }
+    
+    // 更新周统计数据
+    function updateWeeklyStats() {
+      const weekSelect = document.getElementById('week-select');
+      const selectedWeek = weekSelect.value === 'current' 
+        ? getWeekNumber(new Date()) 
+        : parseInt(weekSelect.value);
+      
+      const data = weeklyData[selectedWeek] || {
+        questionCount: 0,
+        correctCount: 0,
+        studentPoints: {}
+      };
+      
+      document.getElementById('question-count').textContent = data.questionCount;
+      
+      const correctRate = data.questionCount ? 
+        Math.round((data.correctCount / data.questionCount) * 100) : 0;
+      document.getElementById('correct-rate').textContent = `${correctRate}%`;
+      
+      const pointsValues = Object.values(data.studentPoints);
+      const maxPoints = pointsValues.length ? Math.max(...pointsValues) : 0;
+      document.getElementById('max-points').textContent = maxPoints;
+    }
+    
+    // 初始化图表
+    function initCharts() {
+      // 周积分分布图
+      const weeklyCtx = document.getElementById('weekly-chart').getContext('2d');
+      window.weeklyChart = new Chart(weeklyCtx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '学生人数',
+            data: [],
+            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '学生人数'
+              },
+              ticks: {
+                precision: 0 // 只显示整数
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: '积分'
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: '本周积分分布'
+            }
+          }
+        }
+      });
+      
+      // 正态分布图
+      const distributionCtx = document.getElementById('distribution-chart').getContext('2d');
+      window.distributionChart = new Chart(distributionCtx, {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '学生人数',
+            data: [],
+            backgroundColor: 'rgba(255, 99, 132, 0.5)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 2,
+            tension: 0.4,
+            fill: true
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '学生人数'
+              },
+              ticks: {
+                precision: 0
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: '课堂积分'
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: '课堂积分分布曲线'
+            }
+          }
+        }
+      });
+      
+      // 成绩分布图
+      const scoreDistributionCtx = document.getElementById('score-distribution-chart').getContext('2d');
+      window.scoreDistributionChart = new Chart(scoreDistributionCtx, {
+        type: 'bar',
+        data: {
+          labels: [],
+          datasets: [{
+            label: '学生人数',
+            data: [],
+            backgroundColor: 'rgba(75, 192, 192, 0.5)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: {
+                display: true,
+                text: '学生人数'
+              },
+              ticks: {
+                precision: 0
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: '初始成绩'
+              }
+            }
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: '初始成绩分布'
+            }
+          }
+        }
+      });
+      
+      updateCharts();
+    }
+    
+    // 更新图表
+    function updateCharts() {
+      // 更新周积分分布图
+      updateWeeklyChart();
+      
+      // 更新成绩分布图
+      updateScoreDistributionChart();
+    }
+    
+    // 更新周积分分布图
+    function updateWeeklyChart() {
+      const weekSelect = document.getElementById('week-select');
+      const selectedWeek = weekSelect.value === 'current' 
+        ? getWeekNumber(new Date()) 
+        : parseInt(weekSelect.value);
+      
+      const data = weeklyData[selectedWeek];
+      
+      if (!data) {
+        window.weeklyChart.data.labels = [];
+        window.weeklyChart.data.datasets[0].data = [];
+        window.weeklyChart.update();
+        
+        window.distributionChart.data.labels = [];
+        window.distributionChart.data.datasets[0].data = [];
+        window.distributionChart.update();
+        return;
+      }
+      
+      // 处理积分分布
+      const pointDistribution = {};
+      students.forEach(student => {
+        const points = data.studentPoints[student.id] || 0;
+        pointDistribution[points] = (pointDistribution[points] || 0) + 1;
+      });
+      
+      // 转换为图表数据
+      const sortedPoints = Object.keys(pointDistribution)
+        .map(Number)
+        .sort((a, b) => a - b);
+        
+      window.weeklyChart.data.labels = sortedPoints;
+      window.weeklyChart.data.datasets[0].data = sortedPoints.map(p => pointDistribution[p]);
+      window.weeklyChart.options.plugins.title.text = `第${selectedWeek}周积分分布`;
+      window.weeklyChart.update();
+      
+      // 更新分布曲线
+      const labels = [];
+      const values = [];
+      
+      // 确保有足够多的点来绘制曲线
+      const min = Math.min(...sortedPoints);
+      const max = Math.max(...sortedPoints);
+      
+      for (let i = min; i <= max; i++) {
+        labels.push(i);
+        values.push(pointDistribution[i] || 0);
+      }
+      
+      window.distributionChart.data.labels = labels;
+      window.distributionChart.data.datasets[0].data = values;
+      window.distributionChart.options.plugins.title.text = `第${selectedWeek}周积分分布曲线`;
+      window.distributionChart.update();
+    }
+    
+    // 更新成绩分布图
+    function updateScoreDistributionChart() {
+      // 处理成绩分布
+      const scoreDistribution = {};
+      students.forEach(student => {
+        // 将成绩分成10分一档
+        const scoreBucket = Math.floor(student.initScore / 10) * 10;
+        scoreDistribution[scoreBucket] = (scoreDistribution[scoreBucket] || 0) + 1;
+      });
+      
+      // 转换为图表数据
+      const sortedScores = Object.keys(scoreDistribution)
+        .map(Number)
+        .sort((a, b) => a - b);
+        
+      const labels = sortedScores.map(s => `${s}-${s+9}`);
+      
+      window.scoreDistributionChart.data.labels = labels;
+      window.scoreDistributionChart.data.datasets[0].data = sortedScores.map(s => scoreDistribution[s]);
+      window.scoreDistributionChart.update();
+    }
+    
+    // 构建详细表格
+    function buildDetailTable() {
+      const weekSelect = document.getElementById('week-select');
+      const selectedWeek = weekSelect.value === 'current' 
+        ? getWeekNumber(new Date()) 
+        : parseInt(weekSelect.value);
+        
+      const tbody = document.getElementById('score-tbody');
+      tbody.innerHTML = '';
+      
+      // 按积分排序
+      const sortedStudents = [...students].sort((a, b) => {
+        const aPoints = weeklyData[selectedWeek]?.studentPoints[a.id] || 0;
+        const bPoints = weeklyData[selectedWeek]?.studentPoints[b.id] || 0;
+        return bPoints - aPoints;
+      });
+      
+      sortedStudents.forEach(student => {
+        const weekRecords = student.history.filter(r => r.week === selectedWeek);
+        const totalQuestions = weekRecords.length;
+        const correctAnswers = weekRecords.filter(h => h.delta > 0).length;
+        const correctRate = totalQuestions ? Math.round(correctAnswers / totalQuestions * 100) : 0;
+        const weekPoints = weekRecords.reduce((sum, r) => sum + r.delta, 0);
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${student.id}</td>
+          <td>${student.name}</td>
+          <td>${student.initScore}</td>
+          <td>${weekPoints}</td>
+          <td>${totalQuestions}</td>
+          <td>${correctRate}%</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+    
+    // 导出周数据
+    function exportWeeklyData() {
+      const weekSelect = document.getElementById('week-select');
+      const selectedWeek = weekSelect.value === 'current' 
+        ? getWeekNumber(new Date()) 
+        : parseInt(weekSelect.value);
+        
+      const filename = `第${selectedWeek}周积分统计.csv`;
+      
+      let csv = '序号,姓名,初始成绩,本周积分,提问次数,正确率\n';
+      
+      // 按积分排序
+      const sortedStudents = [...students].sort((a, b) => {
+        const aPoints = weeklyData[selectedWeek]?.studentPoints[a.id] || 0;
+        const bPoints = weeklyData[selectedWeek]?.studentPoints[b.id] || 0;
+        return bPoints - aPoints;
+      });
+      
+      sortedStudents.forEach(student => {
+        const weekRecords = student.history.filter(r => r.week === selectedWeek);
+        const totalQuestions = weekRecords.length;
+        const correctAnswers = weekRecords.filter(h => h.delta > 0).length;
+        const correctRate = totalQuestions ? Math.round(correctAnswers / totalQuestions * 100) : 0;
+        const weekPoints = weekRecords.reduce((sum, r) => sum + r.delta, 0);
+        
+        csv += `${student.id},${student.name},${student.initScore},${weekPoints},${totalQuestions},${correctRate}%\n`;
+      });
+      
+      downloadCSV(csv, filename);
+    }
+    
+    // 导出详细数据
+    function exportDetailData() {
+      const filename = `学生积分详情_${formatDate(new Date())}.csv`;
+      
+      let csv = '序号,姓名,初始成绩';
+      
+      // 获取所有周
+      const allWeeks = Array.from(weeks).sort((a, b) => a - b);
+      allWeeks.forEach(week => {
+        csv += `,第${week}周积分`;
+      });
+      csv += ',总积分\n';
+      
+      students.forEach(student => {
+        let row = `${student.id},${student.name},${student.initScore}`;
+        
+        let totalPoints = 0;
+        allWeeks.forEach(week => {
+          const weekPoints = weeklyData[week]?.studentPoints[student.id] || 0;
+          row += `,${weekPoints}`;
+          totalPoints += weekPoints;
+        });
+        
+        row += `,${totalPoints}\n`;
+        csv += row;
+      });
+      
+      downloadCSV(csv, filename);
+    }
+    
+    // 下载CSV文件
+    function downloadCSV(csv, filename) {
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+    
+    // 格式化日期
+    function formatDate(date) {
+      return date.getFullYear() +
+        (date.getMonth() + 1).toString().padStart(2, '0') +
+        date.getDate().toString().padStart(2, '0');
+    }
+    
+    // 获取当前周数
+    function getWeekNumber(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    }
+    
+    // 切换标签页
+    function switchTab(tabId) {
+      // 隐藏所有标签内容
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      // 取消标签激活状态
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      // 激活选中的标签
+      document.getElementById(tabId + '-tab').classList.add('active');
+      document.querySelector(`.tab[data-tab="${tabId}"]`).classList.add('active');
+    }
+    
+    // 事件监听
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', function() {
+        const tabId = this.getAttribute('data-tab');
+        switchTab(tabId);
+      });
+    });
+    
+    document.getElementById('week-select').addEventListener('change', function() {
+      updateWeeklyStats();
+      updateWeeklyChart();
+      buildDetailTable();
+    });
+    
+    document.getElementById('export-weekly').addEventListener('click', exportWeeklyData);
+    document.getElementById('export-details').addEventListener('click', exportDetailData);
+    
+    // 初始化
+    load();
+  </script>
+</body>
+</html>
